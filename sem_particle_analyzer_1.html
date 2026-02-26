@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEM Particle Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --panel: #0d1117;
+    --border: #1e2d3d;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --accent3: #39ff14;
+    --text: #c9d1d9;
+    --muted: #4a5568;
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,212,255,0.012) 2px,
+      rgba(0,212,255,0.012) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: rgba(0,212,255,0.03);
+    position: relative;
+    overflow: hidden;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scan 4s linear infinite;
+  }
+  @keyframes scan {
+    0% { transform: scaleX(0); transform-origin: left; }
+    50% { transform: scaleX(1); transform-origin: left; }
+    50.001% { transform: scaleX(1); transform-origin: right; }
+    100% { transform: scaleX(0); transform-origin: right; }
+  }
+
+  .logo {
+    width: 36px; height: 36px;
+    border: 1.5px solid var(--accent);
+    border-radius: 4px;
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+  .logo::before {
+    content: '';
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform: scale(1); }
+    50% { opacity:0.5; transform: scale(0.7); }
+  }
+
+  .header-title { font-size: 18px; font-weight: 800; letter-spacing: 0.08em; }
+  .header-title span { color: var(--accent); }
+  .header-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: 0.1em; }
+
+  .badge {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent3);
+    border: 1px solid var(--accent3);
+    padding: 3px 8px;
+    border-radius: 2px;
+    letter-spacing: 0.15em;
+    animation: blink 3s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .main {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    grid-template-rows: 1fr;
+    height: calc(100vh - 73px);
+  }
+
+  /* ── LEFT PANEL ── */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: var(--panel);
+  }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-track { background: var(--panel); }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .section {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-label::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 6px;
+    padding: 24px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-zone:hover, .upload-zone.drag {
+    border-color: var(--accent);
+    background: rgba(0,212,255,0.04);
+  }
+  .upload-zone input { display: none; }
+  .upload-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+    filter: grayscale(1) brightness(0.6);
+  }
+  .upload-zone.has-image .upload-icon { display: none; }
+  .upload-text { font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.6; }
+  .upload-zone.has-image .upload-text { display: none; }
+  .preview-thumb {
+    display: none;
+    width: 100%;
+    border-radius: 4px;
+    max-height: 140px;
+    object-fit: cover;
+  }
+  .upload-zone.has-image .preview-thumb { display: block; }
+
+  /* Scale bar inputs */
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .input-group label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 5px;
+    letter-spacing: 0.1em;
+  }
+  .input-group input, .input-group select {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-group input:focus, .input-group select:focus { border-color: var(--accent); }
+  .input-group select option { background: #0d1117; }
+
+  /* Sliders */
+  .slider-group { margin-bottom: 16px; }
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .slider-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.1em; }
+  .slider-value {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: bold;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+  input[type=range].max-slider::-webkit-slider-thumb { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+
+  .range-track {
+    position: relative;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 6px 0;
+  }
+  .range-fill {
+    position: absolute;
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    pointer-events: none;
+  }
+  .dual-slider-container { position: relative; height: 20px; margin: 6px 0; }
+  .dual-slider-container input[type=range] {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100%;
+    background: transparent;
+    pointer-events: none;
+  }
+  .dual-slider-container input[type=range]::-webkit-slider-thumb { pointer-events: all; }
+  .dual-slider-bg {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  /* Analyze button */
+  .btn-analyze {
+    width: 100%;
+    padding: 13px;
+    background: transparent;
+    border: 1.5px solid var(--accent);
+    border-radius: 4px;
+    color: var(--accent);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+  }
+  .btn-analyze::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 0;
+  }
+  .btn-analyze:hover::before { transform: translateX(0); }
+  .btn-analyze:hover { color: var(--bg); }
+  .btn-analyze span { position: relative; z-index: 1; }
+  .btn-analyze:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-analyze:disabled::before { display: none; }
+
+  /* Stats cards */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card {
+    background: rgba(0,212,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    transition: border-color 0.2s;
+  }
+  .stat-card:hover { border-color: var(--accent); }
+  .stat-card.full { grid-column: 1/-1; }
+  .stat-label { font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: 0.15em; margin-bottom: 4px; }
+  .stat-value { font-family: var(--mono); font-size: 15px; color: var(--accent); font-weight: bold; }
+  .stat-unit { font-size: 10px; color: var(--muted); margin-left: 2px; }
+
+  .percentile-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+  }
+  .pct-card {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    text-align: center;
+  }
+  .pct-label { font-family: var(--mono); font-size: 9px; color: var(--muted); }
+  .pct-value { font-family: var(--mono); font-size: 13px; color: var(--accent2); font-weight: bold; margin-top: 2px; }
+
+  /* Histogram mini */
+  #histCanvas {
+    width: 100%;
+    height: 80px;
+    border-radius: 4px;
+    display: block;
+  }
+
+  /* ── RIGHT PANEL ── */
+  .viewport {
+    display: flex;
+    flex-direction: column;
+    background: #060a0e;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .toolbar {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(0,0,0,0.3);
+    flex-shrink: 0;
+  }
+  .toolbar-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.1em; }
+
+  .toggle-group { display: flex; gap: 6px; }
+  .toggle-btn {
+    padding: 5px 12px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.08em;
+  }
+  .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: bold; }
+  .toggle-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
+  .canvas-wrap {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #outputCanvas {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    display: block;
+    cursor: crosshair;
+    image-rendering: pixelated;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    opacity: 0.35;
+  }
+  .empty-state svg { width: 64px; height: 64px; }
+  .empty-state p { font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; }
+
+  /* Tooltip */
+  .particle-tooltip {
+    position: fixed;
+    background: rgba(0,0,0,0.9);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+    color: var(--accent);
+  }
+
+  /* Loading spinner */
+  .spinner {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(6,10,14,0.85);
+    place-items: center;
+    z-index: 100;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .spinner.active { display: flex; }
+  .spin-ring {
+    width: 48px; height: 48px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin-text { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.15em; }
+
+  .progress-bar-wrap {
+    width: 180px;
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 1px;
+    transition: width 0.1s;
+  }
+
+  /* Color legend */
+  .color-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .legend-grad {
+    width: 100px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #5500ff, #00d4ff, #39ff14, #ff6b35, #ff0055);
+  }
+  .legend-labels { display: flex; justify-content: space-between; width: 100px; }
+  .legend-label { font-family: var(--mono); font-size: 9px; color: var(--muted); }
+
+  /* Download btn */
+  .btn-download {
+    padding: 5px 12px;
+    background: transparent;
+    border: 1px solid var(--accent3);
+    border-radius: 3px;
+    color: var(--accent3);
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.08em;
+  }
+  .btn-download:hover { background: var(--accent3); color: var(--bg); }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
+    .sidebar { max-height: 60vh; }
+    .viewport { min-height: 400px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"></div>
+  <div>
+    <div class="header-title">SEM <span>PARTICLE</span> ANALYZER</div>
+    <div class="header-sub">SCANNING ELECTRON MICROSCOPY // MORPHOMETRIC ANALYSIS</div>
+  </div>
+  <div class="badge">● LIVE</div>
+</header>
+
+<div class="main">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+
+    <!-- Upload -->
+    <div class="section">
+      <div class="section-label">INPUT IMAGE</div>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/*">
+        <div class="upload-icon">🔬</div>
+        <div class="upload-text">DROP SEM IMAGE HERE<br>or click to browse<br><br>JPG · PNG · TIFF</div>
+        <img class="preview-thumb" id="previewThumb" alt="preview">
+      </div>
+    </div>
+
+    <!-- Scale bar -->
+    <div class="section">
+      <div class="section-label">SCALE CALIBRATION</div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>SCALE BAR LENGTH</label>
+          <input type="number" id="scaleLength" value="10" min="0.001" step="any" placeholder="e.g. 10">
+        </div>
+        <div class="input-group">
+          <label>UNIT</label>
+          <select id="scaleUnit">
+            <option value="um" selected>µm</option>
+            <option value="nm">nm</option>
+            <option value="mm">mm</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <div class="input-group">
+          <label>SCALE BAR WIDTH (PIXELS) — drag bar on image or enter manually</label>
+          <input type="number" id="scaleBarPx" value="" placeholder="auto-detect" min="1">
+        </div>
+      </div>
+      <div style="margin-top:8px; font-family:var(--mono); font-size:10px; color:var(--muted);" id="calibReadout">
+        → Calibration: — µm/px
+      </div>
+    </div>
+
+    <!-- Size cutoff sliders -->
+    <div class="section">
+      <div class="section-label">SIZE FILTER</div>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">MIN DIAMETER</span>
+          <span class="slider-value" id="minVal">0.1 µm</span>
+        </div>
+        <div class="dual-slider-bg"></div>
+        <input type="range" id="minSlider" min="0" max="100" value="2" step="1">
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">MAX DIAMETER</span>
+          <span class="slider-value" id="maxVal">15.0 µm</span>
+        </div>
+        <input type="range" id="maxSlider" min="0" max="100" class="max-slider" value="95" step="1">
+      </div>
+
+      <div style="margin-top:4px; font-family:var(--mono); font-size:10px; color:var(--muted);">
+        Active range: <span id="rangeReadout" style="color:var(--accent)">—</span>
+      </div>
+    </div>
+
+    <!-- Analyze button -->
+    <div class="section">
+      <button class="btn-analyze" id="analyzeBtn" disabled>
+        <span>⬡ ANALYZE PARTICLES</span>
+      </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="section" id="statsSection" style="display:none">
+      <div class="section-label">ANALYSIS RESULTS</div>
+      <div class="stats-grid" style="margin-bottom:10px">
+        <div class="stat-card">
+          <div class="stat-label">DETECTED</div>
+          <div class="stat-value" id="statN">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">MEAN DIA.</div>
+          <div class="stat-value" id="statMean">—<span class="stat-unit">µm</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">STD DEV</div>
+          <div class="stat-value" id="statStd">—<span class="stat-unit">µm</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">SPAN</div>
+          <div class="stat-value" id="statSpan">—</div>
+        </div>
+      </div>
+      <div class="percentile-row" style="margin-bottom:12px">
+        <div class="pct-card">
+          <div class="pct-label">D10</div>
+          <div class="pct-value" id="statD10">—</div>
+        </div>
+        <div class="pct-card">
+          <div class="pct-label">D50</div>
+          <div class="pct-value" id="statD50">—</div>
+        </div>
+        <div class="pct-card">
+          <div class="pct-label">D90</div>
+          <div class="pct-value" id="statD90">—</div>
+        </div>
+      </div>
+      <div style="margin-bottom:6px; font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:0.15em;">SIZE HISTOGRAM</div>
+      <canvas id="histCanvas" width="300" height="80"></canvas>
+    </div>
+
+  </aside>
+
+  <!-- ── VIEWPORT ── -->
+  <div class="viewport">
+    <div class="toolbar">
+      <span class="toolbar-label">DISPLAY</span>
+      <div class="toggle-group">
+        <button class="toggle-btn active" data-mode="overlay" id="modeOverlay">OVERLAY</button>
+        <button class="toggle-btn" data-mode="original" id="modeOriginal">ORIGINAL</button>
+        <button class="toggle-btn" data-mode="binary" id="modeBinary">BINARY</button>
+      </div>
+
+      <span class="toolbar-label" style="margin-left:8px">THICKNESS</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <input type="range" id="circleThickness" min="0.5" max="8" step="0.5" value="2"
+          style="width:70px;margin:0" title="Circle stroke thickness">
+        <span id="thicknessVal" style="font-family:var(--mono);font-size:10px;color:var(--accent);min-width:20px">2×</span>
+      </div>
+
+      <div class="color-legend">
+        <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">SMALL</span>
+        <div>
+          <div class="legend-grad"></div>
+          <div class="legend-labels">
+            <span class="legend-label" id="legendMin">—</span>
+            <span class="legend-label" id="legendMax">—</span>
+          </div>
+        </div>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">LARGE</span>
+      </div>
+      <button class="btn-download" id="downloadBtn" style="display:none" onclick="downloadResult()">↓ EXPORT PNG</button>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="empty-state" id="emptyState">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="32" cy="32" r="20"/>
+          <circle cx="32" cy="32" r="12"/>
+          <circle cx="32" cy="32" r="4"/>
+          <line x1="32" y1="4" x2="32" y2="12"/>
+          <line x1="32" y1="52" x2="32" y2="60"/>
+          <line x1="4" y1="32" x2="12" y2="32"/>
+          <line x1="52" y1="32" x2="60" y2="32"/>
+        </svg>
+        <p>LOAD AN IMAGE TO BEGIN ANALYSIS</p>
+      </div>
+      <canvas id="outputCanvas" style="display:none"></canvas>
+    </div>
+
+    <div class="spinner" id="spinner">
+      <div class="spin-ring"></div>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+      <div class="spin-text" id="spinText">DETECTING PARTICLES...</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="particle-tooltip" id="tooltip"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════
+let state = {
+  imageData: null,        // original ImageData
+  imageEl: null,
+  binaryData: null,       // thresholded ImageData
+  allParticles: [],       // [{cx,cy,radius,diamUm}, ...]
+  filteredParticles: [],
+  umPerPx: null,
+  mode: 'overlay',
+  maxDiamUm: 20,
+  minDiamRange: 0,
+  maxDiamRange: 20,
+};
+
+// ════════════════════════════════════════════════════════════
+//  UPLOAD
+// ════════════════════════════════════════════════════════════
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('fileInput');
+const previewThumb = document.getElementById('previewThumb');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      state.imageEl = img;
+
+      // Render to offscreen canvas to get pixel data
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      state.imageData = ctx.getImageData(0, 0, c.width, c.height);
+      state.binaryData = null;
+      state.allParticles = [];
+      state.filteredParticles = [];
+
+      // Show preview
+      previewThumb.src = e.target.result;
+      uploadZone.classList.add('has-image');
+
+      // Auto detect scale bar
+      autoDetectScaleBar(c, ctx);
+
+      document.getElementById('analyzeBtn').disabled = false;
+      document.getElementById('emptyState').style.display = 'none';
+
+      // Draw original on canvas
+      showImage('original');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ════════════════════════════════════════════════════════════
+//  SCALE BAR AUTO-DETECT
+// ════════════════════════════════════════════════════════════
+function autoDetectScaleBar(canvas, ctx) {
+  const { width: w, height: h } = canvas;
+  // Look at bottom 10% of image, right 60%
+  const stripY = Math.floor(h * 0.90);
+  const stripX = Math.floor(w * 0.55);
+  const strip = ctx.getImageData(stripX, stripY, w - stripX, h - stripY);
+  const d = strip.data;
+  const sw = w - stripX;
+
+  // Find rows with a long white run
+  let bestLen = 0;
+  for (let y = 0; y < strip.height; y++) {
+    let runLen = 0, maxRun = 0;
+    for (let x = 0; x < sw; x++) {
+      const idx = (y * sw + x) * 4;
+      const bright = d[idx] > 200 && d[idx+1] > 200 && d[idx+2] > 200;
+      if (bright) { runLen++; maxRun = Math.max(maxRun, runLen); }
+      else runLen = 0;
+    }
+    if (maxRun > bestLen) bestLen = maxRun;
+  }
+
+  if (bestLen > 20) {
+    document.getElementById('scaleBarPx').value = bestLen;
+    updateCalibration();
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  CALIBRATION
+// ════════════════════════════════════════════════════════════
+function updateCalibration() {
+  const barLen = parseFloat(document.getElementById('scaleLength').value) || 10;
+  const barPx  = parseFloat(document.getElementById('scaleBarPx').value);
+  const unit   = document.getElementById('scaleUnit').value;
+  let factor = 1;
+  if (unit === 'nm') factor = 0.001;
+  if (unit === 'mm') factor = 1000;
+  if (barPx > 0) {
+    state.umPerPx = (barLen * factor) / barPx;
+    document.getElementById('calibReadout').textContent =
+      `→ Calibration: ${state.umPerPx.toFixed(5)} µm/px`;
+    updateSliderLabels();
+  }
+}
+
+['scaleLength','scaleBarPx','scaleUnit'].forEach(id =>
+  document.getElementById(id).addEventListener('input', updateCalibration)
+);
+
+// ════════════════════════════════════════════════════════════
+//  SLIDERS
+// ════════════════════════════════════════════════════════════
+const minSlider = document.getElementById('minSlider');
+const maxSlider = document.getElementById('maxSlider');
+
+function sliderToUm(val) {
+  // Logarithmic mapping: 0→0.05µm, 100→maxDiam
+  const min = 0.05, max = state.maxDiamUm || 20;
+  return min * Math.pow(max/min, val/100);
+}
+
+function updateSliderLabels() {
+  const minUm = sliderToUm(minSlider.value);
+  const maxUm = sliderToUm(maxSlider.value);
+  const unit = document.getElementById('scaleUnit').value === 'nm' ? 'nm' : 'µm';
+  const fmtMin = minUm < 1 ? minUm.toFixed(2) : minUm.toFixed(1);
+  const fmtMax = maxUm < 1 ? maxUm.toFixed(2) : maxUm.toFixed(1);
+  document.getElementById('minVal').textContent = `${fmtMin} µm`;
+  document.getElementById('maxVal').textContent = `${fmtMax} µm`;
+  document.getElementById('rangeReadout').textContent = `${fmtMin} – ${fmtMax} µm`;
+  state.minDiamRange = minUm;
+  state.maxDiamRange = maxUm;
+}
+
+minSlider.addEventListener('input', () => {
+  if (+minSlider.value >= +maxSlider.value) minSlider.value = +maxSlider.value - 1;
+  updateSliderLabels();
+  if (state.allParticles.length) applyFilterAndRedraw();
+});
+maxSlider.addEventListener('input', () => {
+  if (+maxSlider.value <= +minSlider.value) maxSlider.value = +minSlider.value + 1;
+  updateSliderLabels();
+  if (state.allParticles.length) applyFilterAndRedraw();
+});
+
+// ════════════════════════════════════════════════════════════
+//  IMAGE DISPLAY
+// ════════════════════════════════════════════════════════════
+function showImage(mode) {
+  const canvas = document.getElementById('outputCanvas');
+  const ctx = canvas.getContext('2d');
+  if (!state.imageData) return;
+  const { width: w, height: h } = state.imageData;
+  canvas.width = w;
+  canvas.height = h;
+  canvas.style.display = 'block';
+
+  if (mode === 'original' || mode === 'overlay') {
+    ctx.putImageData(state.imageData, 0, 0);
+  } else if (mode === 'binary' && state.binaryData) {
+    ctx.putImageData(state.binaryData, 0, 0);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  IMAGE PROCESSING — pure JS
+// ════════════════════════════════════════════════════════════
+function toGrayscale(data, w, h) {
+  const gray = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < w * h; i++) {
+    gray[i] = 0.299*data[i*4] + 0.587*data[i*4+1] + 0.114*data[i*4+2];
+  }
+  return gray;
+}
+
+function applyCLAHE(gray, w, h) {
+  // Simple adaptive histogram equalization (tile-based)
+  const tileW = Math.floor(w/8), tileH = Math.floor(h/8);
+  const out = new Uint8ClampedArray(gray.length);
+  const clipLimit = 3.0;
+
+  for (let ty = 0; ty < 8; ty++) {
+    for (let tx = 0; tx < 8; tx++) {
+      const x0 = tx*tileW, y0 = ty*tileH;
+      const x1 = tx<7 ? (tx+1)*tileW : w;
+      const y1 = ty<7 ? (ty+1)*tileH : h;
+
+      // Build histogram for this tile
+      const hist = new Int32Array(256);
+      for (let y=y0; y<y1; y++)
+        for (let x=x0; x<x1; x++)
+          hist[gray[y*w+x]]++;
+
+      // Clip
+      const tileSize = (x1-x0)*(y1-y0);
+      const clip = Math.max(1, clipLimit * tileSize / 256);
+      let excess = 0;
+      for (let v=0; v<256; v++) {
+        if (hist[v] > clip) { excess += hist[v]-clip; hist[v]=clip; }
+      }
+      const add = Math.floor(excess/256);
+      for (let v=0; v<256; v++) hist[v] += add;
+
+      // CDF
+      const cdf = new Float32Array(256);
+      cdf[0] = hist[0];
+      for (let v=1; v<256; v++) cdf[v]=cdf[v-1]+hist[v];
+      const cdf0 = cdf.find(v=>v>0)||1;
+      const scale = 255/(tileSize-cdf0+1);
+
+      for (let y=y0; y<y1; y++)
+        for (let x=x0; x<x1; x++)
+          out[y*w+x] = Math.min(255, Math.round((cdf[gray[y*w+x]]-cdf0)*scale));
+    }
+  }
+  return out;
+}
+
+function gaussianBlur3(gray, w, h) {
+  const k = [1,2,1,2,4,2,1,2,1];
+  const out = new Uint8ClampedArray(gray.length);
+  for (let y=1; y<h-1; y++) {
+    for (let x=1; x<w-1; x++) {
+      let sum=0;
+      for (let dy=-1; dy<=1; dy++)
+        for (let dx=-1; dx<=1; dx++)
+          sum += gray[(y+dy)*w+(x+dx)] * k[(dy+1)*3+(dx+1)];
+      out[y*w+x] = sum >> 4;
+    }
+  }
+  return out;
+}
+
+function otsuThreshold(gray, w, h) {
+  const hist = new Int32Array(256);
+  const n = w*h;
+  for (let i=0; i<n; i++) hist[gray[i]]++;
+
+  let sum=0;
+  for (let v=0; v<256; v++) sum+=v*hist[v];
+
+  let sumB=0, wB=0, best=0, thresh=0;
+  for (let v=0; v<256; v++) {
+    wB += hist[v];
+    if (!wB) continue;
+    const wF = n - wB;
+    if (!wF) break;
+    sumB += v*hist[v];
+    const mB = sumB/wB;
+    const mF = (sum-sumB)/wF;
+    const between = wB*wF*(mB-mF)*(mB-mF);
+    if (between > best) { best=between; thresh=v; }
+  }
+  return thresh;
+}
+
+function morphOpen(binary, w, h, r=1) {
+  // Erosion then dilation
+  const eroded = erode(binary, w, h, r);
+  return dilate(eroded, w, h, r);
+}
+
+function erode(binary, w, h, r=1) {
+  const out = new Uint8ClampedArray(binary.length);
+  for (let y=r; y<h-r; y++) {
+    for (let x=r; x<w-r; x++) {
+      let all=true;
+      outer: for (let dy=-r; dy<=r; dy++) {
+        for (let dx=-r; dx<=r; dx++) {
+          if (!binary[(y+dy)*w+(x+dx)]) { all=false; break outer; }
+        }
+      }
+      out[y*w+x] = all ? 255 : 0;
+    }
+  }
+  return out;
+}
+
+function dilate(binary, w, h, r=1) {
+  const out = new Uint8ClampedArray(binary.length);
+  for (let y=r; y<h-r; y++) {
+    for (let x=r; x<w-r; x++) {
+      let any=false;
+      outer: for (let dy=-r; dy<=r; dy++) {
+        for (let dx=-r; dx<=r; dx++) {
+          if (binary[(y+dy)*w+(x+dx)]) { any=true; break outer; }
+        }
+      }
+      out[y*w+x] = any ? 255 : 0;
+    }
+  }
+  return out;
+}
+
+function distanceTransform(binary, w, h) {
+  // Approximate EDT using iterative passes
+  const dist = new Float32Array(w*h);
+  const INF = 1e9;
+  dist.fill(INF);
+  for (let i=0; i<w*h; i++) if(binary[i]) dist[i] = INF; else dist[i] = 0;
+
+  // Forward pass
+  for (let y=1; y<h; y++) {
+    for (let x=1; x<w-1; x++) {
+      const i = y*w+x;
+      if (binary[i]) {
+        dist[i] = Math.min(dist[i],
+          dist[(y-1)*w+x]+1,
+          dist[(y-1)*w+x-1]+1.414,
+          dist[(y-1)*w+x+1]+1.414,
+          dist[y*w+x-1]+1
+        );
+      }
+    }
+  }
+  // Backward pass
+  for (let y=h-2; y>=0; y--) {
+    for (let x=w-2; x>=1; x--) {
+      const i = y*w+x;
+      if (binary[i]) {
+        dist[i] = Math.min(dist[i],
+          dist[(y+1)*w+x]+1,
+          dist[(y+1)*w+x+1]+1.414,
+          dist[(y+1)*w+x-1]+1.414,
+          dist[y*w+x+1]+1
+        );
+      }
+    }
+  }
+  return dist;
+}
+
+// Connected components labeling (Union-Find)
+function connectedComponents(binary, w, h) {
+  const labels = new Int32Array(w*h);
+  const parent = new Int32Array(w*h);
+  let nextLabel = 1;
+
+  function find(x) {
+    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+    return x;
+  }
+  function union(a, b) {
+    a = find(a); b = find(b);
+    if (a !== b) parent[b] = a;
+  }
+
+  // Initialize parent
+  for (let i=0; i<w*h; i++) parent[i] = i;
+
+  // First pass
+  for (let y=0; y<h; y++) {
+    for (let x=0; x<w; x++) {
+      const i = y*w+x;
+      if (!binary[i]) continue;
+      const neighbors = [];
+      if (y>0 && labels[(y-1)*w+x]) neighbors.push(labels[(y-1)*w+x]);
+      if (x>0 && labels[y*w+x-1]) neighbors.push(labels[y*w+x-1]);
+      if (!neighbors.length) { labels[i] = nextLabel++; }
+      else {
+        const minL = Math.min(...neighbors);
+        labels[i] = minL;
+        neighbors.forEach(l => union(minL, l));
+      }
+    }
+  }
+
+  // Second pass - flatten
+  const remap = new Int32Array(nextLabel);
+  let finalCount = 0;
+  for (let i=0; i<w*h; i++) {
+    if (!labels[i]) continue;
+    const root = find(labels[i]);
+    if (!remap[root]) remap[root] = ++finalCount;
+    labels[i] = remap[root];
+  }
+
+  return { labels, count: finalCount };
+}
+
+// Measure region props from labels
+function regionProps(labels, w, h, count) {
+  const areas = new Float64Array(count+1);
+  const sumX  = new Float64Array(count+1);
+  const sumY  = new Float64Array(count+1);
+
+  for (let y=0; y<h; y++) {
+    for (let x=0; x<w; x++) {
+      const l = labels[y*w+x];
+      if (!l) continue;
+      areas[l]++;
+      sumX[l] += x;
+      sumY[l] += y;
+    }
+  }
+
+  const props = [];
+  for (let l=1; l<=count; l++) {
+    if (!areas[l]) continue;
+    props.push({
+      label: l,
+      area: areas[l],
+      cx: sumX[l]/areas[l],
+      cy: sumY[l]/areas[l],
+    });
+  }
+  return props;
+}
+
+// ════════════════════════════════════════════════════════════
+//  MAIN ANALYZE FUNCTION
+// ════════════════════════════════════════════════════════════
+async function analyze() {
+  if (!state.imageData || !state.umPerPx) {
+    alert('Please load an image and set scale calibration first.');
+    return;
+  }
+
+  const spinner = document.getElementById('spinner');
+  const progress = document.getElementById('progressBar');
+  const spinText = document.getElementById('spinText');
+  spinner.classList.add('active');
+
+  // Use requestAnimationFrame to keep UI responsive
+  await tick();
+
+  const { data, width: w, height: h } = state.imageData;
+
+  // 1. Crop metadata strip (bottom 8%)
+  const cropH = Math.floor(h * 0.92);
+  const croppedData = new Uint8ClampedArray(w * cropH * 4);
+  croppedData.set(data.slice(0, w * cropH * 4));
+  const cropped = { data: croppedData, width: w, height: cropH };
+
+  setProgress(10, 'GRAYSCALE CONVERSION...');
+  await tick();
+  const gray = toGrayscale(croppedData, w, cropH);
+
+  setProgress(25, 'CONTRAST ENHANCEMENT...');
+  await tick();
+  const enhanced = applyCLAHE(gray, w, cropH);
+
+  setProgress(35, 'NOISE REDUCTION...');
+  await tick();
+  const blurred = gaussianBlur3(enhanced, w, cropH);
+  // Apply blur twice for smoother result
+  const blurred2 = gaussianBlur3(blurred, w, cropH);
+
+  setProgress(45, 'THRESHOLDING...');
+  await tick();
+  const thresh = otsuThreshold(blurred2, w, cropH);
+  const binary = new Uint8ClampedArray(w * cropH);
+  for (let i=0; i<w*cropH; i++) binary[i] = blurred2[i] > thresh ? 255 : 0;
+
+  // Store binary for display
+  const binImgData = new ImageData(w, cropH);
+  for (let i=0; i<w*cropH; i++) {
+    binImgData.data[i*4]   = binary[i];
+    binImgData.data[i*4+1] = binary[i];
+    binImgData.data[i*4+2] = binary[i];
+    binImgData.data[i*4+3] = 255;
+  }
+  state.binaryData = binImgData;
+
+  setProgress(55, 'MORPHOLOGICAL CLEANUP...');
+  await tick();
+  const cleaned = morphOpen(binary, w, cropH, 1);
+
+  setProgress(65, 'DISTANCE TRANSFORM...');
+  await tick();
+  const dist = distanceTransform(cleaned, w, cropH);
+
+  // Find max distance for threshold
+  let maxDist = 0;
+  for (let i=0; i<dist.length; i++) if (dist[i]<1e8 && dist[i]>maxDist) maxDist=dist[i];
+
+  // Threshold distance map at 40% of max to get seeds
+  const seedBin = new Uint8ClampedArray(w*cropH);
+  const seedThresh = maxDist * 0.4;
+  for (let i=0; i<w*cropH; i++) seedBin[i] = dist[i] >= seedThresh ? 255 : 0;
+
+  setProgress(75, 'LABELING PARTICLES...');
+  await tick();
+  const { labels, count } = connectedComponents(seedBin, w, cropH);
+
+  setProgress(85, 'MEASURING REGIONS...');
+  await tick();
+  const props = regionProps(labels, w, cropH, count);
+
+  // Filter and convert to µm
+  const umPerPx = state.umPerPx;
+  const minAreaPx = Math.PI * 2*2;
+  const maxAreaPx = Math.PI * 300*300;
+
+  state.allParticles = [];
+  for (const p of props) {
+    if (p.area < minAreaPx || p.area > maxAreaPx) continue;
+    const radiusPx = Math.sqrt(p.area / Math.PI);
+    const diamUm = 2 * radiusPx * umPerPx;
+    if (diamUm < 0.05 || diamUm > 100) continue;
+    state.allParticles.push({
+      cx: p.cx, cy: p.cy,
+      radius: radiusPx,
+      diamUm,
+    });
+  }
+
+  // Update max slider range based on actual data
+  if (state.allParticles.length) {
+    const maxFound = Math.max(...state.allParticles.map(p=>p.diamUm));
+    state.maxDiamUm = Math.ceil(maxFound * 1.2);
+    updateSliderLabels();
+  }
+
+  setProgress(95, 'RENDERING...');
+  await tick();
+  applyFilterAndRedraw();
+
+  setProgress(100, 'DONE');
+  await tick(100);
+
+  spinner.classList.remove('active');
+  document.getElementById('statsSection').style.display = 'block';
+  document.getElementById('downloadBtn').style.display = 'block';
+}
+
+async function tick(ms=0) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function setProgress(pct, text) {
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('spinText').textContent = text;
+}
+
+// ════════════════════════════════════════════════════════════
+//  FILTER + REDRAW
+// ════════════════════════════════════════════════════════════
+function applyFilterAndRedraw() {
+  const minD = state.minDiamRange;
+  const maxD = state.maxDiamRange;
+
+  state.filteredParticles = state.allParticles.filter(p =>
+    p.diamUm >= minD && p.diamUm <= maxD
+  );
+
+  updateStats();
+  drawOverlay();
+}
+
+function drawOverlay() {
+  const canvas = document.getElementById('outputCanvas');
+  const ctx = canvas.getContext('2d');
+  const { width: w, height: h } = state.imageData;
+  canvas.width = w;
+  canvas.height = h;
+  canvas.style.display = 'block';
+
+  if (state.mode === 'original' || state.mode === 'overlay') {
+    ctx.putImageData(state.imageData, 0, 0);
+  } else if (state.mode === 'binary' && state.binaryData) {
+    // Draw binary on full canvas
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,w,h);
+    ctx.putImageData(state.binaryData, 0, 0);
+  }
+
+  if (state.mode === 'overlay' && state.filteredParticles.length) {
+    const ps = state.filteredParticles;
+    const diams = ps.map(p=>p.diamUm);
+    const dmin = Math.min(...diams);
+    const dmax = Math.max(...diams);
+
+    // Color stops for gradient: violet → cyan → green → orange → red
+    const stops = [
+      [85, 0, 255],
+      [0, 212, 255],
+      [57, 255, 20],
+      [255, 107, 53],
+      [255, 0, 85],
+    ];
+    function getColor(t) {
+      t = Math.max(0, Math.min(1, t));
+      const seg = t * (stops.length-1);
+      const idx = Math.floor(seg);
+      const f = seg - idx;
+      const a = stops[Math.min(idx, stops.length-1)];
+      const b = stops[Math.min(idx+1, stops.length-1)];
+      return [
+        Math.round(a[0] + (b[0]-a[0])*f),
+        Math.round(a[1] + (b[1]-a[1])*f),
+        Math.round(a[2] + (b[2]-a[2])*f),
+      ];
+    }
+
+    // Update legend
+    document.getElementById('legendMin').textContent = dmin.toFixed(1)+'µm';
+    document.getElementById('legendMax').textContent = dmax.toFixed(1)+'µm';
+
+    // Scale line width relative to image size so circles are always visible
+    const scaleFactor = Math.max(w, h) / 800;
+    const thickness = parseFloat(document.getElementById('circleThickness').value) || 2;
+    ctx.lineWidth = thickness * scaleFactor;
+
+    for (const p of ps) {
+      const t = dmax > dmin ? (p.diamUm - dmin) / (dmax - dmin) : 0.5;
+      const [r,g,b] = getColor(t);
+
+      // Filled tint
+      ctx.fillStyle = `rgba(${r},${g},${b},0.10)`;
+      ctx.beginPath();
+      ctx.arc(p.cx, p.cy, p.radius, 0, Math.PI*2);
+      ctx.fill();
+
+      // Stroke
+      ctx.strokeStyle = `rgba(${r},${g},${b},0.95)`;
+      ctx.beginPath();
+      ctx.arc(p.cx, p.cy, p.radius, 0, Math.PI*2);
+      ctx.stroke();
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  STATS
+// ════════════════════════════════════════════════════════════
+function updateStats() {
+  const ps = state.filteredParticles;
+  if (!ps.length) {
+    document.getElementById('statN').textContent = '0';
+    return;
+  }
+  const diams = ps.map(p=>p.diamUm).sort((a,b)=>a-b);
+  const n = diams.length;
+  const mean = diams.reduce((a,b)=>a+b,0)/n;
+  const std  = Math.sqrt(diams.reduce((a,b)=>a+(b-mean)**2,0)/n);
+  const d10  = diams[Math.floor(n*0.10)];
+  const d50  = diams[Math.floor(n*0.50)];
+  const d90  = diams[Math.floor(n*0.90)];
+  const span = (d90-d10)/d50;
+
+  document.getElementById('statN').textContent = n;
+  document.getElementById('statMean').innerHTML = mean.toFixed(2)+'<span class="stat-unit">µm</span>';
+  document.getElementById('statStd').innerHTML  = std.toFixed(2)+'<span class="stat-unit">µm</span>';
+  document.getElementById('statSpan').textContent = span.toFixed(2);
+  document.getElementById('statD10').textContent = d10.toFixed(2);
+  document.getElementById('statD50').textContent = d50.toFixed(2);
+  document.getElementById('statD90').textContent = d90.toFixed(2);
+
+  drawHistogram(diams);
+}
+
+function drawHistogram(diams) {
+  const canvas = document.getElementById('histCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth * window.devicePixelRatio || 300;
+  const H = canvas.height = 80 * window.devicePixelRatio || 80;
+  const scale = W/300;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#0a1520';
+  ctx.fillRect(0,0,W,H);
+
+  if (!diams.length) return;
+
+  const nBins = 25;
+  const minD = diams[0], maxD = diams[diams.length-1];
+  const binW = (maxD - minD) / nBins || 1;
+  const bins = new Array(nBins).fill(0);
+  for (const d of diams) {
+    const i = Math.min(nBins-1, Math.floor((d-minD)/binW));
+    bins[i]++;
+  }
+  const maxBin = Math.max(...bins);
+
+  const pad = 6;
+  const bw = (W - pad*2) / nBins;
+
+  // Draw bars with gradient coloring
+  for (let i=0; i<nBins; i++) {
+    const t = i/(nBins-1);
+    const barH = (bins[i]/maxBin) * (H - pad*2);
+    const x = pad + i*bw;
+    const y = H - pad - barH;
+
+    // Color matches overlay gradient
+    const stops = [[85,0,255],[0,212,255],[57,255,20],[255,107,53],[255,0,85]];
+    const seg = t*(stops.length-1);
+    const idx = Math.floor(seg);
+    const f = seg-idx;
+    const a = stops[Math.min(idx,stops.length-1)];
+    const b = stops[Math.min(idx+1,stops.length-1)];
+    const r = Math.round(a[0]+(b[0]-a[0])*f);
+    const g = Math.round(a[1]+(b[1]-a[1])*f);
+    const bv = Math.round(a[2]+(b[2]-a[2])*f);
+
+    ctx.fillStyle = `rgba(${r},${g},${bv},0.8)`;
+    ctx.fillRect(x+1, y, bw-2, barH);
+  }
+
+  // D50 line
+  const d50 = diams[Math.floor(diams.length*0.5)];
+  const xD50 = pad + ((d50-minD)/((maxD-minD)||1)) * (W-pad*2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3,3]);
+  ctx.beginPath();
+  ctx.moveTo(xD50, pad);
+  ctx.lineTo(xD50, H-pad);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// ════════════════════════════════════════════════════════════
+//  CANVAS TOOLTIP on hover
+// ════════════════════════════════════════════════════════════
+document.getElementById('outputCanvas').addEventListener('mousemove', e => {
+  const canvas = e.target;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top)  * scaleY;
+
+  const tooltip = document.getElementById('tooltip');
+  let nearest = null, minDist = Infinity;
+
+  for (const p of state.filteredParticles) {
+    const d = Math.hypot(mx-p.cx, my-p.cy);
+    if (d < p.radius * 1.5 && d < minDist) {
+      minDist = d; nearest = p;
+    }
+  }
+
+  if (nearest) {
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX+12)+'px';
+    tooltip.style.top  = (e.clientY-10)+'px';
+    tooltip.textContent = `⌀ ${nearest.diamUm.toFixed(3)} µm`;
+  } else {
+    tooltip.style.display = 'none';
+  }
+});
+
+document.getElementById('outputCanvas').addEventListener('mouseleave', () => {
+  document.getElementById('tooltip').style.display = 'none';
+});
+
+// ════════════════════════════════════════════════════════════
+//  MODE TOGGLE
+// ════════════════════════════════════════════════════════════
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.mode = btn.dataset.mode;
+    if (state.allParticles.length) drawOverlay();
+    else if (state.imageData) showImage(state.mode);
+  });
+});
+
+// Thickness slider
+document.getElementById('circleThickness').addEventListener('input', function() {
+  document.getElementById('thicknessVal').textContent = this.value + '×';
+  if (state.allParticles.length) drawOverlay();
+});
+
+// ════════════════════════════════════════════════════════════
+//  ANALYZE BUTTON
+// ════════════════════════════════════════════════════════════
+document.getElementById('analyzeBtn').addEventListener('click', analyze);
+
+// ════════════════════════════════════════════════════════════
+//  DOWNLOAD
+// ════════════════════════════════════════════════════════════
+function downloadResult() {
+  const canvas = document.getElementById('outputCanvas');
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'sem_particle_analysis.png';
+  a.click();
+}
+
+// ════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════
+updateSliderLabels();
+</script>
+</body>
+</html>
